@@ -3,6 +3,16 @@ import gleam/result
 import internal.{type Metadata, Metadata}
 import sqlight
 
+fn file_decoder() -> decode.Decoder(Metadata) {
+  use hash <- decode.field(0, decode.string)
+  use orig_path <- decode.field(1, decode.string)
+  use stored_as <- decode.field(2, decode.string)
+  use file_size <- decode.field(3, decode.int)
+  use added_at <- decode.field(4, decode.string)
+
+  decode.success(Metadata(hash, orig_path, stored_as, file_size, added_at))
+}
+
 pub fn init_database(conn: sqlight.Connection) -> Result(Nil, String) {
   let sql =
     "CREATE TABLE IF NOT EXISTS files (
@@ -26,24 +36,24 @@ pub fn select_file(
   hash: String,
   conn: sqlight.Connection,
 ) -> Result(List(Metadata), String) {
-  let file_decoder = {
-    use hash <- decode.field(0, decode.string)
-    use orig_path <- decode.field(1, decode.string)
-    use stored_as <- decode.field(2, decode.string)
-    use file_size <- decode.field(3, decode.int)
-    use added_at <- decode.field(4, decode.string)
-
-    decode.success(Metadata(hash, orig_path, stored_as, file_size, added_at))
-  }
-
-  let sql = "SELECT * FROM files WHERE hash = ?"
+  let sql = "SELECT * FROM files WHERE hash = ?;"
 
   sqlight.query(
     sql,
     on: conn,
     with: [sqlight.text(hash)],
-    expecting: file_decoder,
+    expecting: file_decoder(),
   )
+  |> result.map_error(fn(error) { error.message })
+}
+
+pub fn select_files(
+  conn: sqlight.Connection,
+) -> Result(List(Metadata), String) {
+  let sql = "SELECT * FROM files;"
+
+  sql
+  |> sqlight.query(on: conn, with: [], expecting: file_decoder())
   |> result.map_error(fn(error) { error.message })
 }
 

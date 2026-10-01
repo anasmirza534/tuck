@@ -1,6 +1,7 @@
 ////  TODO: what happens when file content changed? like for text/docs files
 
-import database.{init_database, insert_metadata, select_file}
+import argv
+import database.{init_database, insert_metadata, select_file, select_files}
 import filepath
 import gleam/bool
 import gleam/io
@@ -30,9 +31,32 @@ pub fn main() -> Nil {
 fn run(conn: sqlight.Connection) -> Result(Nil, String) {
   use _ <- result.try(conn |> init_database())
 
-  use _ <- result.try("test-20mb.bin" |> add_file(conn))
-
-  Ok(Nil)
+  case argv.load().arguments {
+    [] ->
+      Error(
+        get_usage_info()
+        |> list.prepend("No subcommand provided. Check usage with `help`")
+        |> string.join("\n"),
+      )
+    ["add", path] -> path |> add_file(conn)
+    ["show", hash] -> hash |> show_hash(conn)
+    ["ls"] -> conn |> list_files()
+    // ["find"] -> 3
+    ["help"] -> {
+      get_usage_info() |> string.join("\n") |> io.println()
+      Ok(Nil)
+    }
+    unknown ->
+      Error(
+        get_usage_info()
+        |> list.prepend(
+          "Unknown command: "
+          <> unknown |> string.join(" ")
+          <> ". Check usage with `help`",
+        )
+        |> string.join("\n"),
+      )
+  }
 }
 
 fn add_file(
@@ -157,6 +181,56 @@ fn add_file(
   io.println("File added with hash: " <> metadata.hash)
 
   Ok(Nil)
+}
+
+fn show_hash(hash: String, conn: sqlight.Connection) -> Result(Nil, String) {
+  use db_files <- result.try(
+    hash
+    |> select_file(conn)
+    |> result.map_error(fn(error) {
+      "Error finding file in db, hash: " <> hash <> " , error: " <> error
+    }),
+  )
+
+  use <- bool.guard(
+    when: {
+      db_files
+      |> list.is_empty()
+    },
+    return: Error("No file found for given hash: " <> hash),
+  )
+
+  let assert Ok(db_file_metadata) = db_files |> list.first()
+
+  print_metadata(db_file_metadata)
+
+  Ok(Nil)
+}
+
+fn list_files(conn: sqlight.Connection) -> Result(Nil, String) {
+  use db_files <- result.try(
+    select_files(conn)
+    |> result.map_error(fn(error) { "Error querying db, error: " <> error }),
+  )
+
+  db_files
+  |> list.each(fn(db_file) {
+    db_file
+    |> print_metadata()
+  })
+
+  Ok(Nil)
+}
+
+fn get_usage_info() -> List(String) {
+  [
+    "tuck: Command line utility to manage file metadata",
+    "",
+    "usage: tuck <sub-command>",
+    "  add <file-path> ",
+    "  show <hash> ",
+    "  help ",
+  ]
 }
 
 @external(erlang, "filename", "absname")
