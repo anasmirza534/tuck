@@ -2,3 +2,6 @@
 *.ez
 /build
 erl_crash.dump
+
+tuck.db
+*20mb.bin
