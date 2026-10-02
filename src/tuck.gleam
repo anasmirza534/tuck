@@ -2,11 +2,12 @@
 
 import argv
 import database.{
-  init_database, insert_metadata, select_file_by_hash,
+  init_database, insert_metadata, select_by_name, select_file_by_hash,
   select_file_by_trunced_hash, select_files,
 }
 import filepath
 import gleam/bool
+import gleam/int
 import gleam/io
 import gleam/list
 import gleam/result
@@ -39,7 +40,7 @@ fn run(conn: sqlight.Connection) -> Result(Nil, String) {
     ["add", path] -> path |> add_command(conn)
     ["show", hash] -> hash |> show_command(conn)
     ["ls"] -> conn |> list_command()
-    ["find"] -> conn |> find_command()
+    ["find", text] -> text |> find_command(conn)
     ["help"] -> help_command()
     unknown_args -> unknown_command(unknown_args)
   }
@@ -246,17 +247,64 @@ fn list_command(conn: sqlight.Connection) -> Result(Nil, String) {
     |> result.map_error(fn(error) { "Error querying db, error: " <> error }),
   )
 
-  db_files
-  |> list.each(fn(db_file) {
-    db_file
-    |> print_metadata()
-  })
+  case db_files {
+    [] -> io.println("No files found in db.")
+    db_files -> {
+      db_files
+      |> list.each(fn(db_file) {
+        db_file
+        |> print_metadata()
+      })
+
+      io.println(
+        "Total files: "
+        <> {
+          db_files
+          |> list.length()
+          |> int.to_string()
+        },
+      )
+    }
+  }
 
   Ok(Nil)
 }
 
-fn find_command(_conn: sqlight.Connection) -> Result(Nil, String) {
-  Error("TODO: not implemented")
+fn find_command(text: String, conn: sqlight.Connection) -> Result(Nil, String) {
+  use <- bool.guard(
+    when: text |> string.length() < 3,
+    return: "Text should be more than 3 characters, text: "
+      |> string.append(text)
+      |> Error(),
+  )
+
+  use db_files <- result.try(
+    text
+    |> select_by_name(conn)
+    |> result.map_error(fn(error) { "Error querying db, error: " <> error }),
+  )
+
+  case db_files {
+    [] -> io.println("No files found in db.")
+    db_files -> {
+      db_files
+      |> list.each(fn(db_file) {
+        db_file
+        |> print_metadata()
+      })
+
+      io.println(
+        "Total files: "
+        <> {
+          db_files
+          |> list.length()
+          |> int.to_string()
+        },
+      )
+    }
+  }
+
+  Ok(Nil)
 }
 
 fn get_usage_info() -> List(String) {
@@ -266,6 +314,8 @@ fn get_usage_info() -> List(String) {
     "usage: tuck <sub-command>",
     "  add <file-path> ",
     "  show <hash> ",
+    "  ls ",
+    "  find <text> ",
     "  help ",
   ]
 }

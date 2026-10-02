@@ -95,3 +95,20 @@ pub fn insert_metadata(
   |> result.replace(Nil)
   |> result.map_error(fn(error) { error.message })
 }
+
+pub fn select_by_name(
+  text: String,
+  conn: sqlight.Connection,
+) -> Result(List(Metadata), String) {
+  let sql = "SELECT * FROM files WHERE orig_path LIKE ? OR stored_as LIKE ?;"
+
+  let text_query = sqlight.text("%" <> text <> "%")
+
+  sql
+  |> sqlight.query(
+    on: conn,
+    with: [text_query, text_query],
+    expecting: file_decoder(),
+  )
+  |> result.map_error(fn(error) { error.message })
+}
