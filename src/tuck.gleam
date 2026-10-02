@@ -198,8 +198,17 @@ fn add_command(
 }
 
 fn show_command(hash: String, conn: sqlight.Connection) -> Result(Nil, String) {
+  let hash_len = hash |> string.length()
+
+  use <- bool.guard(
+    when: hash_len < 4,
+    return: "Hash should be atleast 4 characters, hash: "
+      |> string.append(hash)
+      |> Error(),
+  )
+
   use db_files <- result.try(
-    case string.length(hash) == 16 {
+    case hash_len < 64 {
       True -> hash |> select_file_by_trunced_hash(conn)
       False -> hash |> select_file_by_hash(conn)
     }
@@ -208,19 +217,27 @@ fn show_command(hash: String, conn: sqlight.Connection) -> Result(Nil, String) {
     }),
   )
 
-  use <- bool.guard(
-    when: {
-      db_files
-      |> list.is_empty()
-    },
-    return: Error("No file found for given hash: " <> hash),
-  )
+  case db_files {
+    [] ->
+      "No file found for given hash: "
+      |> string.append(hash)
+      |> Error()
+    [db_file_metadata] -> {
+      db_file_metadata |> print_metadata()
+      Ok(Nil)
+    }
+    many_files -> {
+      many_files
+      |> list.each(fn(db_file_metadata) {
+        db_file_metadata
+        |> print_metadata()
+      })
 
-  let assert Ok(db_file_metadata) = db_files |> list.first()
-
-  print_metadata(db_file_metadata)
-
-  Ok(Nil)
+      "Multiple files found for given hash: "
+      |> string.append(hash)
+      |> Error()
+    }
+  }
 }
 
 fn list_command(conn: sqlight.Connection) -> Result(Nil, String) {
