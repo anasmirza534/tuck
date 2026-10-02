@@ -1,9 +1,7 @@
-////  TODO: what happens when file content changed? like for text/docs files
-
 import argv
 import database.{
   init_database, insert_metadata, select_by_name, select_file_by_hash,
-  select_file_by_trunced_hash, select_files,
+  select_file_by_stored_as, select_file_by_trunced_hash, select_files,
 }
 import filepath
 import gleam/bool
@@ -41,6 +39,7 @@ fn run(conn: sqlight.Connection) -> Result(Nil, String) {
     ["show", hash] -> hash |> show_command(conn)
     ["ls"] -> conn |> list_command()
     ["find", text] -> text |> find_command(conn)
+    ["info", path] -> path |> info_command(conn)
     ["help"] -> help_command()
     unknown_args -> unknown_command(unknown_args)
   }
@@ -270,6 +269,56 @@ fn list_command(conn: sqlight.Connection) -> Result(Nil, String) {
   Ok(Nil)
 }
 
+fn info_command(
+  file_path: String,
+  conn: sqlight.Connection,
+) -> Result(Nil, String) {
+  use path <- result.try(
+    file_path
+    |> absname()
+    |> filepath.expand()
+    |> result.replace_error("Invalid path: " <> file_path),
+  )
+
+  use exists <- result.try(
+    path
+    |> simplifile.is_file()
+    |> result.replace_error("File permission issue, path: " <> path),
+  )
+
+  use <- bool.guard(
+    when: exists |> bool.negate(),
+    return: Error("Its not a file, path: " <> path),
+  )
+
+  let name = path |> filepath.base_name()
+
+  use db_files <- result.try(
+    name
+    |> select_file_by_stored_as(conn)
+    |> result.map_error(fn(error) {
+      "Error finding file in db, path: " <> path <> " , error: " <> error
+    }),
+  )
+
+  case db_files {
+    [] -> Error("File not tracked by tuck, path: " <> path)
+    [db_file_metadata] -> {
+      db_file_metadata |> print_metadata()
+      Ok(Nil)
+    }
+    many_files -> {
+      many_files
+      |> list.each(fn(db_file_metadata) {
+        db_file_metadata
+        |> print_metadata()
+      })
+
+      Error("Multiple db entries found for file, path: " <> path)
+    }
+  }
+}
+
 fn find_command(text: String, conn: sqlight.Connection) -> Result(Nil, String) {
   use <- bool.guard(
     when: text |> string.length() < 3,
@@ -312,11 +361,12 @@ fn get_usage_info() -> List(String) {
     "tuck: Command line utility to manage file metadata",
     "",
     "usage: tuck <sub-command>",
-    "  add <file-path> ",
-    "  show <hash> ",
-    "  ls ",
-    "  find <text> ",
-    "  help ",
+    "  ls                     list all files tracked by tuck",
+    "  add <file-path>        hash, store metadata and rename a file",
+    "  show <hash>            show metadata for a file by hash (or prefix)",
+    "  info <file-path>       show metadata for an already-stored file",
+    "  find <text>            search stored files by original or stored name",
+    "  help                   show this usage info",
   ]
 }
 

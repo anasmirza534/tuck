@@ -96,6 +96,21 @@ pub fn insert_metadata(
   |> result.map_error(fn(error) { error.message })
 }
 
+pub fn select_file_by_stored_as(
+  stored_as: String,
+  conn: sqlight.Connection,
+) -> Result(List(Metadata), String) {
+  let sql = "SELECT * FROM files WHERE stored_as = ?;"
+
+  sqlight.query(
+    sql,
+    on: conn,
+    with: [sqlight.text(stored_as)],
+    expecting: file_decoder(),
+  )
+  |> result.map_error(fn(error) { error.message })
+}
+
 pub fn select_by_name(
   text: String,
   conn: sqlight.Connection,
