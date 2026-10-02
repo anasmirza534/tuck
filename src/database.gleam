@@ -32,7 +32,7 @@ pub fn init_database(conn: sqlight.Connection) -> Result(Nil, String) {
   Ok(Nil)
 }
 
-pub fn select_file(
+pub fn select_file_by_hash(
   hash: String,
   conn: sqlight.Connection,
 ) -> Result(List(Metadata), String) {
@@ -42,6 +42,21 @@ pub fn select_file(
     sql,
     on: conn,
     with: [sqlight.text(hash)],
+    expecting: file_decoder(),
+  )
+  |> result.map_error(fn(error) { error.message })
+}
+
+pub fn select_file_by_trunced_hash(
+  hash: String,
+  conn: sqlight.Connection,
+) -> Result(List(Metadata), String) {
+  let sql = "SELECT * FROM files WHERE hash LIKE ?;"
+
+  sqlight.query(
+    sql,
+    on: conn,
+    with: [sqlight.text(hash <> "%")],
     expecting: file_decoder(),
   )
   |> result.map_error(fn(error) { error.message })

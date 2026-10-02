@@ -1,7 +1,10 @@
 ////  TODO: what happens when file content changed? like for text/docs files
 
 import argv
-import database.{init_database, insert_metadata, select_file, select_files}
+import database.{
+  init_database, insert_metadata, select_file_by_hash,
+  select_file_by_trunced_hash, select_files,
+}
 import filepath
 import gleam/bool
 import gleam/io
@@ -32,34 +35,45 @@ fn run(conn: sqlight.Connection) -> Result(Nil, String) {
   use _ <- result.try(conn |> init_database())
 
   case argv.load().arguments {
-    [] ->
-      Error(
-        get_usage_info()
-        |> list.prepend("No subcommand provided. Check usage with `help`")
-        |> string.join("\n"),
-      )
-    ["add", path] -> path |> add_file(conn)
-    ["show", hash] -> hash |> show_hash(conn)
-    ["ls"] -> conn |> list_files()
-    // ["find"] -> 3
-    ["help"] -> {
-      get_usage_info() |> string.join("\n") |> io.println()
-      Ok(Nil)
-    }
-    unknown ->
-      Error(
-        get_usage_info()
-        |> list.prepend(
-          "Unknown command: "
-          <> unknown |> string.join(" ")
-          <> ". Check usage with `help`",
-        )
-        |> string.join("\n"),
-      )
+    [] -> no_args_command()
+    ["add", path] -> path |> add_command(conn)
+    ["show", hash] -> hash |> show_command(conn)
+    ["ls"] -> conn |> list_command()
+    ["find"] -> conn |> find_command()
+    ["help"] -> help_command()
+    unknown_args -> unknown_command(unknown_args)
   }
 }
 
-fn add_file(
+fn no_args_command() -> Result(Nil, String) {
+  get_usage_info()
+  |> list.prepend("")
+  |> list.prepend("No subcommand provided. Check usage with `help`")
+  |> string.join("\n")
+  |> Error()
+}
+
+fn help_command() -> Result(Nil, String) {
+  get_usage_info()
+  |> string.join("\n")
+  |> io.println()
+
+  Ok(Nil)
+}
+
+fn unknown_command(args: List(String)) -> Result(Nil, String) {
+  get_usage_info()
+  |> list.prepend("")
+  |> list.prepend(
+    "Unknown command: "
+    <> args |> string.join(" ")
+    <> ". Check usage with `help`",
+  )
+  |> string.join("\n")
+  |> Error()
+}
+
+fn add_command(
   file_path: String,
   conn: sqlight.Connection,
 ) -> Result(Nil, String) {
@@ -125,7 +139,7 @@ fn add_file(
 
   use db_files <- result.try(
     hash
-    |> select_file(conn)
+    |> select_file_by_hash(conn)
     |> result.map_error(fn(error) {
       "Error finding file in db, path: " <> path <> " , error: " <> error
     }),
@@ -183,10 +197,12 @@ fn add_file(
   Ok(Nil)
 }
 
-fn show_hash(hash: String, conn: sqlight.Connection) -> Result(Nil, String) {
+fn show_command(hash: String, conn: sqlight.Connection) -> Result(Nil, String) {
   use db_files <- result.try(
-    hash
-    |> select_file(conn)
+    case string.length(hash) == 16 {
+      True -> hash |> select_file_by_trunced_hash(conn)
+      False -> hash |> select_file_by_hash(conn)
+    }
     |> result.map_error(fn(error) {
       "Error finding file in db, hash: " <> hash <> " , error: " <> error
     }),
@@ -207,7 +223,7 @@ fn show_hash(hash: String, conn: sqlight.Connection) -> Result(Nil, String) {
   Ok(Nil)
 }
 
-fn list_files(conn: sqlight.Connection) -> Result(Nil, String) {
+fn list_command(conn: sqlight.Connection) -> Result(Nil, String) {
   use db_files <- result.try(
     select_files(conn)
     |> result.map_error(fn(error) { "Error querying db, error: " <> error }),
@@ -220,6 +236,10 @@ fn list_files(conn: sqlight.Connection) -> Result(Nil, String) {
   })
 
   Ok(Nil)
+}
+
+fn find_command(_conn: sqlight.Connection) -> Result(Nil, String) {
+  Error("TODO: not implemented")
 }
 
 fn get_usage_info() -> List(String) {
