@@ -1,11 +1,15 @@
+import envoy
+import filepath
 import gleam/bit_array
 import gleam/crypto
 import gleam/int
 import gleam/io
 import gleam/list
+import gleam/result
 import gleam/string
 import gleam/time/calendar
 import gleam/time/timestamp
+import simplifile
 
 pub type Metadata {
   Metadata(
@@ -41,6 +45,29 @@ pub fn get_ts() -> timestamp.Timestamp {
 
 pub fn ts_to_utc_string(ts: timestamp.Timestamp) -> String {
   timestamp.to_rfc3339(ts, calendar.utc_offset)
+}
+
+pub fn get_db_file_path() -> Result(String, String) {
+  use home <- result.try(
+    "HOME"
+    |> envoy.get()
+    |> result.replace_error("Error getting `HOME` env variable."),
+  )
+
+  let db_dir_path = filepath.join(home, ".local/share/tuck")
+
+  use _ <- result.try(
+    db_dir_path
+    |> simplifile.create_directory_all()
+    |> result.map_error(fn(error) {
+      "Error creating database directory, path: "
+      <> db_dir_path
+      <> ", error: "
+      <> simplifile.describe_error(error)
+    }),
+  )
+
+  Ok(filepath.join(db_dir_path, "tuck.db"))
 }
 
 pub fn get_day_str(ts: timestamp.Timestamp) -> String {

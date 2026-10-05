@@ -13,21 +13,26 @@ import gleam/string
 import glugify
 import input.{input}
 import internal.{
-  Metadata, get_day_str, get_ts, make_hash, print_metadata, ts_to_utc_string,
+  Metadata, get_day_str, get_db_file_path, get_ts, make_hash, print_metadata,
+  ts_to_utc_string,
 }
 import simplifile
 import sqlight
 
 pub fn main() -> Nil {
-  let res = sqlight.with_connection("tuck.db", run)
-
-  case res {
+  case open_db() {
     Ok(_) -> Nil
     Error(msg) -> {
       io.println_error(msg)
       halt(1)
     }
   }
+}
+
+fn open_db() -> Result(Nil, String) {
+  use db_path <- result.try(get_db_file_path())
+
+  sqlight.with_connection(db_path, run)
 }
 
 fn run(conn: sqlight.Connection) -> Result(Nil, String) {
