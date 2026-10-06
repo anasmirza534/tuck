@@ -2,21 +2,35 @@
 
 CLI based application for renaming files and storing thier metadata.
 
-[![Package Version](https://img.shields.io/hexpm/v/tuck)](https://hex.pm/packages/tuck)
-[![Hex Docs](https://img.shields.io/badge/hex-docs-ffaff3)](https://tuck.hexdocs.pm/)
+## Install
+
+Requires [Gleam](https://gleam.run) and Erlang (e.g. via [mise](https://mise.jdx.dev)),
+plus `rebar3` (needed to build `sqlight`'s native SQLite driver):
 
 ```sh
-gleam add tuck@1
-```
-```gleam
-import tuck
-
-pub fn main() -> Nil {
-  // TODO: An example of the project in use
-}
+mise use -g erlang gleam rebar
 ```
 
-Further documentation can be found at <https://tuck.hexdocs.pm/>.
+Then build a standalone copy that doesn't need recompiling to run:
+
+```sh
+git clone https://github.com/anasmirza534/tuck.git
+cd tuck
+gleam export erlang-shipment
+```
+
+Put a `tuck` command on your `PATH` (adjust the path to where you cloned it):
+
+```sh
+cat > ~/.local/bin/tuck << 'EOF'
+#!/bin/sh
+exec /path/to/tuck/build/erlang-shipment/entrypoint.sh run "$@"
+EOF
+chmod +x ~/.local/bin/tuck
+```
+
+Now `tuck help` works from any directory. Metadata is stored in
+`~/.local/share/tuck/tuck.db`.
 
 ## Development
 
@@ -25,16 +39,5 @@ gleam run   # Run the project
 gleam test  # Run the tests
 ```
 
-## Test
-
-create test file
-
-```sh
-dd if=/dev/urandom of=test-20mb.bin bs=1m count=20
-```
-
-and run 
-
-```sh
-gleam run
-```
+Changes to the source don't affect the exported `tuck` command above until
+you re-run `gleam export erlang-shipment`.
